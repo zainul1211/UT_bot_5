@@ -1,18 +1,42 @@
-name: Run UT Bot
+import os
+import time
+import requests
+from datetime import datetime
 
-on:
-  workflow_dispatch:
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-jobs:
-  run-bot:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: python main.py
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
+STOCKS = {
+    "HDFC Bank": "HDFCBANK.NS",
+    "ITC": "ITC.NS",
+    "Bandhan Bank": "BANDHANBNK.NS",
+    "NTPC": "NTPC.NS",
+    "Wipro": "WIPRO.NS"
+}
+
+def get_price(symbol):
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10).json()
+        meta = r["chart"]["result"][0]["meta"]
+        return meta["regularMarketPrice"]
+    except:
+        return "N/A"
+
+def send_msg(text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
+
+send_msg("✅ *UT Bot ON* - Sirf 5 Stocks ka Price aayega")
+
+while True:
+    try:
+        msg = f"📊 *Stock Price - {datetime.now().strftime('%d %b, %I:%M %p')}*\n\n"
+        for name, sym in STOCKS.items():
+            price = get_price(sym)
+            msg += f"• *{name}*: ₹{price}\n"
+        send_msg(msg)
+        print("Price bhej diya")
+    except Exception as e:
+        print(f"Error: {e}")
+    time.sleep(900)
