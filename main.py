@@ -1,10 +1,11 @@
 import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
+IST = timezone(timedelta(hours=5, minutes=30))
 
 STOCKS = {
     "HDFC Bank": "HDFCBANK.NS",
@@ -31,7 +32,7 @@ send_msg("✅ *UT Bot ON* - Sirf 5 Stocks ka Price aayega")
 
 while True:
     try:
-        msg = f"📊 *Stock Price - {datetime.now().strftime('%d %b, %I:%M %p')}*\n\n"
+        msg = f"📊 *Stock Price - {datetime.now(IST).strftime('%d %b, %I:%M %p')}*\n\n"
         for name, sym in STOCKS.items():
             price = get_price(sym)
             msg += f"• *{name}*: ₹{price}\n"
