@@ -30,7 +30,6 @@ def get_data(symbol):
     lows = [c for c in q["low"] if c is not None]
     return closes, highs, lows
 
-# --- UT BOT - Chart Jaisa ---
 def calc_ut(closes, highs, lows):
     ATR_PERIOD = 10
     ATR_MULT = 1.0
@@ -44,23 +43,46 @@ def calc_ut(closes, highs, lows):
     upper = prev_close + (ATR_MULT * atr)
     lower = prev_close - (ATR_MULT * atr)
     if price > upper:
-        return "BUY", price, atr
+        return "BUY", price
     elif price < lower:
-        return "SELL", price, atr
+        return "SELL", price
     else:
-        return "WAIT", price, atr
+        return "WAIT", price
 
-send_msg("✅ *UT BOT ON - 5 Stocks* \nChart jaisa signal aayega")
+def is_market_open():
+    now = datetime.now(IST)
+    # Saturday = 5, Sunday = 6 - Market band
+    if now.weekday() >= 5:
+        return False
+    # Market time 9:15 AM se 3:30 PM tak
+    start = now.replace(hour=9, minute=15, second=0)
+    end = now.replace(hour=15, minute=30, second=0)
+    return start <= now <= end
 
-last = {name: "WAIT" for name in STOCKS}
+send_msg("✅ *UT BOT ON - 5 Stocks*\nBot chalu rahega, signal sirf 9:15 - 3:30 me aayega")
+
+last = {name: None for name in STOCKS}
 
 while True:
     try:
+        now = datetime.now(IST)
+        t = now.strftime('%I:%M %p')
+
+        # Market band hai to signal mat bhejo, bas wait karo
+        if not is_market_open():
+            print(f"{t} Market BAND hai, wait kar raha hu...", flush=True)
+            time.sleep(60)
+            continue
+
         for name, sym in STOCKS.items():
             closes, highs, lows = get_data(sym)
-            signal, price, atr = calc_ut(closes, highs, lows)
-            t = datetime.now(IST).strftime('%I:%M %p')
+            signal, price = calc_ut(closes, highs, lows)
             print(f"{t} {name}: {price:.2f} Signal:{signal}", flush=True)
+
+            # Pehli baar chalu hone pe purana signal mat bhejo
+            if last[name] is None:
+                last[name] = signal
+                continue
 
             if signal != last[name] and signal != "WAIT":
                 if signal == "BUY":
