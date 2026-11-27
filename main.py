@@ -1,6 +1,4 @@
-import os
-import time
-import requests
+import os, requests, time
 from datetime import datetime, timezone, timedelta
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -9,35 +7,70 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 STOCKS = {
     "HDFC Bank": "HDFCBANK.NS",
-    "ITC": "ITC.NS",
+    "Wipro": "WIPRO.NS",
     "Bandhan Bank": "BANDHANBNK.NS",
-    "NTPC": "NTPC.NS",
-    "Wipro": "WIPRO.NS"
+    "ITC": "ITC.NS",
+    "NTPC": "NTPC.NS"
 }
-
-def get_price(symbol):
-    try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10).json()
-        meta = r["chart"]["result"][0]["meta"]
-        return meta["regularMarketPrice"]
-    except:
-        return "N/A"
 
 def send_msg(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"})
+    try:
+        requests.post(url, data={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"}, timeout=10)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
-send_msg("✅ *UT Bot ON* - Sirf 5 Stocks ka Price aayega")
+def get_data(symbol):
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=5d"
+    r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15).json()
+    res = r["chart"]["result"][0]
+    q = res["indicators"]["quote"][0]
+    closes = [c for c in q["close"] if c is not None]
+    highs = [c for c in q["high"] if c is not None]
+    lows = [c for c in q["low"] if c is not None]
+    return closes, highs, lows
+
+# --- UT BOT - Chart Jaisa ---
+def calc_ut(closes, highs, lows):
+    ATR_PERIOD = 10
+    ATR_MULT = 1.0
+    trs = []
+    for i in range(1, len(closes)):
+        tr = max(highs[i]-lows[i], abs(highs[i]-closes[i-1]), abs(lows[i]-closes[i-1]))
+        trs.append(tr)
+    atr = sum(trs[-ATR_PERIOD:]) / ATR_PERIOD
+    price = closes[-1]
+    prev_close = closes[-2]
+    upper = prev_close + (ATR_MULT * atr)
+    lower = prev_close - (ATR_MULT * atr)
+    if price > upper:
+        return "BUY", price, atr
+    elif price < lower:
+        return "SELL", price, atr
+    else:
+        return "WAIT", price, atr
+
+send_msg("✅ *UT BOT ON - 5 Stocks* \nChart jaisa signal aayega")
+
+last = {name: "WAIT" for name in STOCKS}
 
 while True:
     try:
-        msg = f"📊 *Stock Price - {datetime.now(IST).strftime('%d %b, %I:%M %p')}*\n\n"
         for name, sym in STOCKS.items():
-            price = get_price(sym)
-            msg += f"• *{name}*: ₹{price}\n"
-        send_msg(msg)
-        print("Price bhej diya")
+            closes, highs, lows = get_data(sym)
+            signal, price, atr = calc_ut(closes, highs, lows)
+            t = datetime.now(IST).strftime('%I:%M %p')
+            print(f"{t} {name}: {price:.2f} Signal:{signal}", flush=True)
+
+            if signal != last[name] and signal != "WAIT":
+                if signal == "BUY":
+                    send_msg(f"🟢 *UT BOT - BUY {name}*\n\nPrice: ₹{price:.2f}\nTime: {t}\n\nChart me UT BUY aaya hai.")
+                else:
+                    send_msg(f"🔴 *UT BOT - SELL {name}*\n\nPrice: ₹{price:.2f}\nTime: {t}\n\nChart me UT SELL aaya hai.")
+                last[name] = signal
+            if signal == "WAIT":
+                last[name] = "WAIT"
+            time.sleep(2)
     except Exception as e:
         print(f"Error: {e}")
-    time.sleep(900)
+    time.sleep(60)
